@@ -1,19 +1,11 @@
-name: Build Windows Game
+name: Build Windows
 
 on:
   workflow_dispatch:
-    inputs:
-      build-defines:
-        description: Build defines
-        default: '-DGITHUB_BUILD'
-      save-artifact:
-        description: Save artifact
-        type: boolean
-        default: true
   push:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     defaults:
@@ -21,66 +13,84 @@ jobs:
         shell: bash
 
     env:
-      BUILD_DEFINES: ${{ github.event.inputs.build-defines || '-DGITHUB_BUILD' }}
+      BUILD_DEFINES: -DGITHUB_BUILD
 
     steps:
-      # 🔧 Fix Git
-      - name: Fix git safe directory
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-
-      # 📥 Baixar repo
+      # 📥 Checkout
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 🧠 Instalar Haxe
+      # ⚡ Cache Haxelib (GANHO DE VELOCIDADE)
+      - name: Cache Haxelib
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/haxelib
+            .haxelib
+          key: haxelib-${{ runner.os }}-${{ hashFiles('**/hmm.json') }}
+          restore-keys: |
+            haxelib-${{ runner.os }}
+
+      # 🧠 Setup Haxe
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: 4.3.3
 
-      # 📦 Setup haxelib
+      # 📦 Setup repo do haxelib
       - name: Setup haxelib
         run: |
           mkdir -p ~/haxelib
           haxelib setup ~/haxelib
 
-      # 🔥 Instalar dependências (SEM ERRO)
-      - name: Install dependencies
+      # 🔥 INSTALAÇÃO FORÇADA (resolve o bug do hxp)
+      - name: Install core libs
         run: |
-          haxelib install hxp
-          haxelib install hmm
-          haxelib run hmm install || true
+          haxelib install hxp --quiet || true
+          haxelib install hmm --quiet || true
+          haxelib install lime --quiet || true
+          haxelib install openfl --quiet || true
+          haxelib install flixel --quiet || true
+          haxelib install flixel-tools --quiet || true
+          haxelib install hxcpp --quiet || true
 
-          haxelib install lime
-          haxelib install openfl
-          haxelib install flixel
-          haxelib install flixel-tools
-          haxelib install flixel-addons
-          haxelib install flixel-ui
-          haxelib install hxcpp
+      # 🧩 Instalar deps do projeto (se tiver hmm.json)
+      - name: Install project dependencies
+        run: |
+          if [ -f "hmm.json" ]; then
+            haxelib run hmm install
+          fi
 
       # ⚙️ Setup Lime
       - name: Setup Lime
         run: |
           haxelib run lime setup
 
-      # 💥 Compilar HXCPP (ESSENCIAL)
+      # 💥 Compilar HXCPP (FIX REAL)
       - name: Compile HXCPP
         run: |
-              HAXEPATH=$(haxelib path hxcpp | head -n 1)
-               cd "$HAXEPATH/tools/hxcpp"
-               haxe compile.hxml
+          HXCPP_PATH=$(haxelib path hxcpp | grep -v "^-" | head -n 1)
+          cd "$HXCPP_PATH/tools/hxcpp"
+          haxe compile.hxml
 
-      # 🏗️ Build do jogo
-      - name: Build Windows
+      # ⚡ Cache HXCPP (acelera MUITO builds futuros)
+      - name: Cache HXCPP
+        uses: actions/cache@v4
+        with:
+          path: /usr/share/hxcpp
+          key: hxcpp-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            hxcpp-${{ runner.os }}
+
+      # 🏗️ BUILD
+      - name: Build Game
         run: |
           haxelib run lime build windows -release $BUILD_DEFINES
 
-      # 💾 Salvar build
-      - name: Upload artifact
-        if: ${{ github.event.inputs.save-artifact }}
+      # 💾 Upload
+      - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
