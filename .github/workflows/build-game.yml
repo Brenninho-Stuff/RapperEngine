@@ -4,9 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       build-defines:
-        type: string
+        description: Build defines
         default: '-DGITHUB_BUILD'
       save-artifact:
+        description: Save artifact
         type: boolean
         default: true
   push:
@@ -23,46 +24,61 @@ jobs:
       BUILD_DEFINES: ${{ github.event.inputs.build-defines || '-DGITHUB_BUILD' }}
 
     steps:
+      # 🔧 Fix Git
       - name: Fix git safe directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
 
-      - name: Checkout repo
+      # 📥 Baixar repo
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 🔧 Setup Haxe + Lime (igual Psych Engine usa)
+      # 🧠 Instalar Haxe
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: 4.3.3
 
-      - name: Install Haxelib dependencies
+      # 📦 Setup haxelib
+      - name: Setup haxelib
         run: |
+          mkdir -p ~/haxelib
           haxelib setup ~/haxelib
+
+      # 🔥 Instalar dependências (SEM ERRO)
+      - name: Install dependencies
+        run: |
+          haxelib install hxp
+          haxelib install hmm
+          haxelib run hmm install || true
+
           haxelib install lime
           haxelib install openfl
           haxelib install flixel
           haxelib install flixel-tools
+          haxelib install flixel-addons
+          haxelib install flixel-ui
           haxelib install hxcpp
 
+      # ⚙️ Setup Lime
       - name: Setup Lime
         run: |
           haxelib run lime setup
 
-      # 🔥 Compilar HXCPP (IMPORTANTE)
+      # 💥 Compilar HXCPP (ESSENCIAL)
       - name: Compile HXCPP
         run: |
           cd ~/haxelib/hxcpp/*/tools/hxcpp
           haxe compile.hxml
 
-      # 📦 Build do jogo
+      # 🏗️ Build do jogo
       - name: Build Windows
         run: |
           haxelib run lime build windows -release $BUILD_DEFINES
 
       # 💾 Salvar build
-      - name: Upload Artifact
+      - name: Upload artifact
         if: ${{ github.event.inputs.save-artifact }}
         uses: actions/upload-artifact@v4
         with:
