@@ -68,10 +68,10 @@ jobs:
 
       # 💥 Compilar HXCPP (ESSENCIAL)
       - name: Compile HXCPP
-  run: |
-    HAXEPATH=$(haxelib path hxcpp | head -n 1)
-    cd "$HAXEPATH/tools/hxcpp"
-    haxe compile.hxml
+        run: |
+              HAXEPATH=$(haxelib path hxcpp | head -n 1)
+               cd "$HAXEPATH/tools/hxcpp"
+               haxe compile.hxml
 
       # 🏗️ Build do jogo
       - name: Build Windows
